@@ -7,7 +7,6 @@ import * as cheerio from 'cheerio';
 const isValidUrl = (url) => {
     try {
         const parsed = new URL(url);
-        // Be flexible with subdomains
         return parsed.hostname.includes('beinsports.com.tr');
     } catch (e) {
         return false;
@@ -16,7 +15,6 @@ const isValidUrl = (url) => {
 
 // Helper: Resolve redirect if it's a redirector URL
 const resolveRedirect = async (url) => {
-    // Only resolve known redirect patterns
     if (url.includes('dt-switch.akamaized.net')) {
         try {
             const response = await axios.head(url, {
@@ -24,17 +22,15 @@ const resolveRedirect = async (url) => {
                 validateStatus: status => status >= 200 && status < 400,
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-                    'Referer': 'https://beinsports.com.tr/' // Important for some CDNs
+                    'Referer': 'https://beinsports.com.tr/'
                 }
             });
             if (response.status === 301 || response.status === 302) {
                 const finalUrl = response.headers.location;
-                // Sometimes location is relative (unlikely here but good practice)
                 if (finalUrl) return finalUrl;
             }
         } catch (e) {
             console.warn("Failed to resolve redirect:", e.message);
-            // Fallback to original if resolution fails
         }
     }
     return url;
@@ -96,7 +92,6 @@ export async function GET(request) {
                         }
                         return null;
                     };
-                    // Search inside pageProps.data (usually contains the match data)
                     videoSource = findVideoUrl(nextData?.props?.pageProps?.data);
                 }
             }
@@ -136,7 +131,7 @@ export async function GET(request) {
         if (!videoType) {
             if (videoSource.includes('.m3u8')) videoType = 'hls';
             else if (videoSource.includes('.mp4')) videoType = 'mp4';
-            else if (videoSource.includes('akamaized')) videoType = 'mp4'; // Likely resolved to mp4 now
+            else if (videoSource.includes('akamaized')) videoType = 'mp4';
             else videoType = 'unknown';
         }
 

@@ -1,63 +1,62 @@
-
 'use client';
-import { useState, useEffect, useRef } from 'react';
-import dynamic from 'next/dynamic';
-import { Play, Calendar, List, ChevronRight, AlertCircle, Loader2, RefreshCcw } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Play, Calendar, List, AlertCircle } from 'lucide-react';
 import './globals.css';
 
-const ReactPlayer = dynamic(() => import('react-player'), { ssr: false });
-
-// MOCK DATA - To be replaced with automated scraping later
-const MATCH_DATA = {
-  'Week 26': [
-    { id: 'gs-ank', title: 'Ankaragücü 0-3 Galatasaray', url: 'https://beinsports.com.tr/mac-ozetleri-goller/super-lig/ozet/2023-2024/26/mke-ankaragucu-0-3-galatasaray-mac-ozeti' },
-    { id: 'bjk-kon', title: 'Beşiktaş 2-0 Konyaspor', url: 'https://beinsports.com.tr/mac-ozetleri-goller/super-lig/ozet/2023-2024/26/besiktas-2-0-tumosan-konyaspor-mac-ozeti' },
-    { id: 'fb-rizespor', title: 'Çaykur Rizespor 1-3 Fenerbahçe', url: 'https://beinsports.com.tr/mac-ozetleri-goller/super-lig/ozet/2023-2024/26/caykur-rizespor-1-3-fenerbahce-mac-ozeti' },
-  ],
-  'Week 25': [
-    { id: 'gs-basak', title: 'Galatasaray 2-0 Başakşehir', url: 'https://beinsports.com.tr/mac-ozetleri-goller/super-lig/ozet/2023-2024/25/galatasaray-2-0-istanbul-basaksehir-mac-ozeti' },
-    { id: 'fb-alanya', title: 'Fenerbahçe 2-2 Alanyaspor', url: 'https://beinsports.com.tr/mac-ozetleri-goller/super-lig/ozet/2023-2024/25/fenerbahce-2-2-alanyaspor-mac-ozeti' },
-  ]
-};
-
 export default function Home() {
-  const [selectedWeek, setSelectedWeek] = useState('Week 26');
+  const [selectedWeek, setSelectedWeek] = useState(1);
+  const [matches, setMatches] = useState([]);
   const [selectedMatch, setSelectedMatch] = useState(null);
-  const [videoData, setVideoData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [fixtureLoading, setFixtureLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const playerRef = useRef(null);
 
+  const weeks = Array.from({ length: 34 }, (_, i) => i + 1);
+
+  // Hafta değişince fikstürü çek
   useEffect(() => {
-    // Reset playing state when video changes
-    setIsPlaying(false);
-  }, [videoData]);
+    const fetchFixture = async () => {
+      setFixtureLoading(true);
+      setMatches([]);
+      setSelectedMatch(null);
+      setError(null);
+      try {
+        const res = await fetch(`/api/fixture?week=${selectedWeek}`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        setMatches(data.matches || []);
+      } catch (e) {
+        console.error('Fixture error:', e);
+      } finally {
+        setFixtureLoading(false);
+      }
+    };
+    fetchFixture();
+  }, [selectedWeek]);
 
-  const fetchVideoSource = async (match) => {
-    // If clicking the same match, do nothing unless it failed
+  // Maç tıklanınca - video URL zaten fixture API'den geliyor
+  const playMatch = async (match) => {
     if (selectedMatch?.id === match.id && !error) return;
 
-    setLoading(true);
     setError(null);
-    setVideoData(null);
     setSelectedMatch(match);
 
-    try {
-      const res = await fetch(`/api/scrape?url=${encodeURIComponent(match.url)}`);
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to load video');
+    // Eğer doğrudan video yoksa, scrape API'yi dene
+    if (!match.videoUrl && match.pageLink) {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/scrape?url=${encodeURIComponent(match.pageLink)}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Video yüklenemedi');
+        // videoSource'u match objesine ekle
+        match.videoUrl = data.videoSource;
+        match.videoType = data.videoType;
+        setSelectedMatch({ ...match });
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
       }
-
-      console.log('Video Data Loaded:', data);
-      setVideoData(data);
-    } catch (err) {
-      console.error(err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -67,51 +66,61 @@ export default function Home() {
       <div className="sidebar">
         <h2 style={{ fontSize: '1.2rem', fontWeight: 'bold', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Play fill="white" size={20} />
-          Mac Özeti
+          Maç Özeti
         </h2>
 
-        {/* Week Selector */}
+        {/* Hafta Seçici */}
         <div className="week-selector">
           <label className="dropdown-label"><Calendar size={14} style={{ display: 'inline', marginRight: '4px' }} /> Hafta Seçin</label>
           <select
             className="dropdown"
             value={selectedWeek}
             onChange={(e) => {
-              setSelectedWeek(e.target.value);
+              setSelectedWeek(parseInt(e.target.value));
               setSelectedMatch(null);
-              setVideoData(null);
-              setIsPlaying(false);
+              setError(null);
             }}
           >
-            {Object.keys(MATCH_DATA).map(week => (
-              <option key={week} value={week}>{week}</option>
+            {weeks.map(w => (
+              <option key={w} value={w}>{w}. Hafta</option>
             ))}
           </select>
         </div>
 
-        {/* Match List */}
+        {/* Maç Listesi */}
         <div className="match-list">
           <label className="dropdown-label"><List size={14} style={{ display: 'inline', marginRight: '4px' }} /> Maçlar</label>
-          {MATCH_DATA[selectedWeek]?.map((match) => (
-            <div
-              key={match.id}
-              className={`match-card ${selectedMatch?.id === match.id ? 'active' : ''}`}
-              onClick={() => {
-                fetchVideoSource(match);
-                setIsPlaying(false);
-              }}
-            >
-              <div className="match-title">{match.title}</div>
-            </div>
-          ))}
+
+          {fixtureLoading ? (
+            <div style={{ color: '#888', padding: '1rem', textAlign: 'center' }}>Yükleniyor...</div>
+          ) : matches.length === 0 ? (
+            <div style={{ color: '#888', padding: '1rem', textAlign: 'center' }}>Bu hafta için maç bulunamadı.</div>
+          ) : (
+            matches.map((match) => (
+              <div
+                key={match.id}
+                className={`match-card ${selectedMatch?.id === match.id ? 'active' : ''}`}
+                style={{ opacity: match.hasSummary ? 1 : 0.5, cursor: match.hasSummary ? 'pointer' : 'default' }}
+                onClick={() => match.hasSummary && playMatch(match)}
+              >
+                <div className="match-title">
+                  {match.date && <span style={{ display: 'block', fontSize: '0.72rem', color: '#888', marginBottom: '3px' }}>{match.date}</span>}
+                  <span style={{ fontWeight: 600 }}>
+                    {match.home} {match.scoreHome ?? ''} - {match.scoreAway ?? ''} {match.away}
+                  </span>
+                  {!match.hasSummary && <span style={{ display: 'block', fontSize: '0.7rem', color: '#eab308', marginTop: '4px' }}>Özet Mevcut Değil</span>}
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Ana İçerik */}
       <div className="main-content">
         {selectedMatch ? (
           <div style={{ width: '100%', maxWidth: '1000px' }}>
-            <h1>{videoData?.title || selectedMatch.title}</h1>
+            <h1>{selectedMatch.title || `${selectedMatch.home} - ${selectedMatch.away}`}</h1>
 
             <div className="video-container">
               {loading && (
@@ -122,50 +131,60 @@ export default function Home() {
                 <div style={{ color: '#ef4444', textAlign: 'center', padding: '2rem' }}>
                   <AlertCircle size={48} style={{ margin: '0 auto 1rem' }} />
                   <p>{error}</p>
-                  <p style={{ fontSize: '0.8rem', opacity: 0.7, marginTop: '0.5rem' }}>
-                    Orijinal linke yönlendiriliyorsunuz...
-                  </p>
-                  <a href={selectedMatch.url} target="_blank" rel="noopener noreferrer" className="retry-btn">
-                    beIN Sports'ta İzle
-                  </a>
+                  {selectedMatch.pageLink && (
+                    <a href={selectedMatch.pageLink} target="_blank" rel="noopener noreferrer" className="retry-btn">
+                      beIN Sports&apos;ta İzle
+                    </a>
+                  )}
                 </div>
               )}
 
-              {!loading && !error && videoData && (
-                videoData.videoType === 'iframe' ? (
-                  <iframe
-                    src={videoData.videoSource}
-                    width="100%"
-                    height="100%"
-                    frameBorder="0"
-                    allowFullScreen
-                    style={{ position: 'absolute', top: 0, left: 0 }}
-                  />
-                ) : (
-                  <div style={{ width: '100%', height: '100%', position: 'relative', background: '#000' }}>
-                    {/* Try native video tag first as it is more robust for direct MP4 */}
-                    <video
-                      key={videoData.videoSource}
-                      controls
-                      autoPlay
-                      playsInline
-                      width="100%"
-                      height="100%"
-                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                      crossOrigin="anonymous"
-                    >
-                      <source src={videoData.videoSource} type="video/mp4" />
-                      Your browser does not support the video tag.
-                    </video>
-
-                    <div style={{ position: 'absolute', bottom: -30, right: 0, fontSize: '0.8rem', color: '#666' }}>
-                      Source: {videoData.videoType}
-                    </div>
-                  </div>
-
-                )
+              {!loading && !error && selectedMatch.videoUrl && (
+                <video
+                  key={selectedMatch.videoUrl}
+                  controls
+                  autoPlay
+                  playsInline
+                  width="100%"
+                  height="100%"
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
+                >
+                  <source src={selectedMatch.videoUrl} type="video/mp4" />
+                  Tarayıcınız video etiketini desteklemiyor.
+                </video>
               )}
             </div>
+
+            {/* Gol/Pozisyon Anları */}
+            {selectedMatch.events && selectedMatch.events.length > 0 && (
+              <div style={{ marginTop: '1.5rem' }}>
+                <h3 style={{ fontSize: '1rem', marginBottom: '0.75rem', color: '#ccc' }}>Önemli Anlar</h3>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {selectedMatch.events.map((e, i) => (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        if (e.videoUrl) {
+                          setSelectedMatch(prev => ({ ...prev, videoUrl: e.videoUrl, title: e.description }));
+                        }
+                      }}
+                      style={{
+                        padding: '0.4rem 0.8rem',
+                        fontSize: '0.8rem',
+                        background: e.type === 'goal' ? 'rgba(16,185,129,0.15)' : 'rgba(99,102,241,0.15)',
+                        border: `1px solid ${e.type === 'goal' ? '#10b981' : '#6366f1'}`,
+                        borderRadius: '8px',
+                        color: '#fff',
+                        cursor: e.videoUrl ? 'pointer' : 'default',
+                        opacity: e.videoUrl ? 1 : 0.5
+                      }}
+                    >
+                      {e.minute}&apos; {e.description} {e.type === 'goal' ? '⚽' : ''}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="placeholder">

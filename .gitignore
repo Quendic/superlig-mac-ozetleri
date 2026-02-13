@@ -35,8 +35,4 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Temporary debug files
-debug-scrape.js
-test-redirect.js
-verify-fix.js
-debug-output.txt
+
