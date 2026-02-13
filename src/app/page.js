@@ -128,7 +128,10 @@ export default function Home() {
                 key={match.id}
                 className={`match-card ${selectedMatch?.id === match.id ? 'active' : ''}`}
                 style={{ opacity: match.hasSummary ? 1 : 0.5, cursor: match.hasSummary ? 'pointer' : 'default' }}
+                tabIndex={match.hasSummary ? 0 : -1}
+                role="button"
                 onClick={() => match.hasSummary && playMatch(match)}
+                onKeyDown={(e) => e.key === 'Enter' && match.hasSummary && playMatch(match)}
               >
                 <div className="match-title">
                   {match.date && <span style={{ display: 'block', fontSize: '0.72rem', color: '#888', marginBottom: '3px' }}>{match.date}</span>}

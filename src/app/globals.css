@@ -203,3 +203,30 @@ h1 {
 .retry-btn:hover {
   background-color: var(--primary-hover);
 }
+
+/* TV Remote / D-pad Focus Styles */
+.match-card:focus {
+  outline: none;
+  border-color: var(--accent);
+  background-color: #27272a;
+  transform: translateY(-2px);
+  box-shadow: 0 0 0 2px var(--accent), 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.dropdown:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.goal-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent), 0 4px 12px rgba(16, 185, 129, 0.3);
+  transform: scale(1.05);
+}
+
+button:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
