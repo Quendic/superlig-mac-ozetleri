@@ -2,12 +2,33 @@ import { NextResponse } from 'next/server';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 
+// beIN fikstür sayfasından güncel haftayı tespit et
+async function detectCurrentWeek() {
+    try {
+        const res = await axios.get('https://beinsports.com.tr/lig/super-lig/fikstur', {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            timeout: 8000
+        });
+        const $ = cheerio.load(res.data);
+        const json = JSON.parse($('#__NEXT_DATA__').html());
+        return json.props?.pageProps?.orgData?.activeRound?.round || 22;
+    } catch {
+        return 22; // fallback
+    }
+}
+
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
-    const week = searchParams.get('week') || '1';
+    let week = searchParams.get('week') || 'current';
+
+    // Güncel haftayı tespit et
+    let currentWeek = null;
+    if (week === 'current') {
+        currentWeek = await detectCurrentWeek();
+        week = String(currentWeek);
+    }
 
     // beIN Sports'un özet sayfası, hafta bazlı tüm maçları ve video URL'lerini döndürür.
-    // URL'deki slug önemli değil (any-mac-ozeti), data her zaman o haftanın tüm maçlarını içerir.
     const url = `https://beinsports.com.tr/mac-ozetleri-goller/super-lig/ozet/2025-2026/${week}/any-mac-ozeti`;
 
     try {
@@ -85,7 +106,7 @@ export async function GET(request) {
                 };
             });
 
-        return NextResponse.json({ week, matches });
+        return NextResponse.json({ week: parseInt(week), currentWeek, matches });
 
     } catch (error) {
         console.error('Fixture API error:', error.message);

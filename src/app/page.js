@@ -4,7 +4,8 @@ import { Play, Calendar, List, AlertCircle } from 'lucide-react';
 import './globals.css';
 
 export default function Home() {
-  const [selectedWeek, setSelectedWeek] = useState(1);
+  const [selectedWeek, setSelectedWeek] = useState(null);
+  const [currentWeek, setCurrentWeek] = useState(null);
   const [matches, setMatches] = useState([]);
   const [selectedMatch, setSelectedMatch] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -13,8 +14,30 @@ export default function Home() {
 
   const weeks = Array.from({ length: 34 }, (_, i) => i + 1);
 
-  // Hafta değişince fikstürü çek
+  // İlk açılışta güncel haftayı tespit et
   useEffect(() => {
+    const init = async () => {
+      setFixtureLoading(true);
+      try {
+        const res = await fetch('/api/fixture?week=current');
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        if (data.currentWeek) setCurrentWeek(data.currentWeek);
+        setSelectedWeek(data.week);
+        setMatches(data.matches || []);
+      } catch (e) {
+        console.error('Init error:', e);
+        setSelectedWeek(1);
+      } finally {
+        setFixtureLoading(false);
+      }
+    };
+    init();
+  }, []);
+
+  // Hafta değişince fikstürü çek (ilk yükleme hariç)
+  useEffect(() => {
+    if (selectedWeek === null) return;
     const fetchFixture = async () => {
       setFixtureLoading(true);
       setMatches([]);
@@ -24,6 +47,7 @@ export default function Home() {
         const res = await fetch(`/api/fixture?week=${selectedWeek}`);
         const data = await res.json();
         if (data.error) throw new Error(data.error);
+        if (data.currentWeek && !currentWeek) setCurrentWeek(data.currentWeek);
         setMatches(data.matches || []);
       } catch (e) {
         console.error('Fixture error:', e);
@@ -74,15 +98,18 @@ export default function Home() {
           <label className="dropdown-label"><Calendar size={14} style={{ display: 'inline', marginRight: '4px' }} /> Hafta Seçin</label>
           <select
             className="dropdown"
-            value={selectedWeek}
+            value={selectedWeek || ''}
             onChange={(e) => {
               setSelectedWeek(parseInt(e.target.value));
               setSelectedMatch(null);
               setError(null);
             }}
           >
+            {selectedWeek === null && <option value="">Yükleniyor...</option>}
             {weeks.map(w => (
-              <option key={w} value={w}>{w}. Hafta</option>
+              <option key={w} value={w} style={w === currentWeek ? { color: '#10b981', fontWeight: 'bold' } : {}}>
+                {w}. Hafta{w === currentWeek ? ' ★ Güncel' : ''}
+              </option>
             ))}
           </select>
         </div>
@@ -155,12 +182,12 @@ export default function Home() {
               )}
             </div>
 
-            {/* Gol/Pozisyon Anları */}
-            {selectedMatch.events && selectedMatch.events.length > 0 && (
+            {/* Goller */}
+            {selectedMatch.events && selectedMatch.events.filter(e => e.type === 'goal').length > 0 && (
               <div style={{ marginTop: '1.5rem' }}>
-                <h3 style={{ fontSize: '1rem', marginBottom: '0.75rem', color: '#ccc' }}>Önemli Anlar</h3>
+                <h3 style={{ fontSize: '1rem', marginBottom: '0.75rem', color: '#ccc' }}>⚽ Goller</h3>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  {selectedMatch.events.map((e, i) => (
+                  {selectedMatch.events.filter(e => e.type === 'goal').map((e, i) => (
                     <button
                       key={i}
                       onClick={() => {
@@ -171,15 +198,15 @@ export default function Home() {
                       style={{
                         padding: '0.4rem 0.8rem',
                         fontSize: '0.8rem',
-                        background: e.type === 'goal' ? 'rgba(16,185,129,0.15)' : 'rgba(99,102,241,0.15)',
-                        border: `1px solid ${e.type === 'goal' ? '#10b981' : '#6366f1'}`,
+                        background: 'rgba(16,185,129,0.15)',
+                        border: '1px solid #10b981',
                         borderRadius: '8px',
                         color: '#fff',
                         cursor: e.videoUrl ? 'pointer' : 'default',
                         opacity: e.videoUrl ? 1 : 0.5
                       }}
                     >
-                      {e.minute}&apos; {e.description} {e.type === 'goal' ? '⚽' : ''}
+                      {e.minute}&apos; {e.description} ⚽
                     </button>
                   ))}
                 </div>
