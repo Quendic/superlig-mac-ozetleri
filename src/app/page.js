@@ -13,6 +13,8 @@ export default function Home() {
   const [fixtureLoading, setFixtureLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  useKeyboardControls(null, selectedMatch);
+
   const weeks = Array.from({ length: 34 }, (_, i) => i + 1);
 
   // İlk açılışta güncel haftayı tespit et
@@ -199,6 +201,7 @@ export default function Home() {
                           setSelectedMatch(prev => ({ ...prev, videoUrl: e.videoUrl, title: e.description }));
                         }
                       }}
+                      className="goal-btn"
                       style={{
                         padding: '0.4rem 0.8rem',
                         fontSize: '0.8rem',
@@ -227,4 +230,63 @@ export default function Home() {
       </div>
     </div>
   );
+}
+
+// Global Klavye Dinleyicisi (TV Kumandası & Klavye Desteği)
+function useKeyboardControls(videoRef, selectedMatch) {
+  useEffect(() => {
+    if (!selectedMatch) return;
+
+    const handleKeyDown = (e) => {
+      // Eğer kullanıcı bir input içindeyse (ki burada yok ama genel kural) karışma
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+
+      const video = document.querySelector('video');
+      if (!video) return;
+
+      // Hangi tuşa basıldı?
+      switch (e.key) {
+        case ' ':
+        case 'Enter': // Kumanda OK tuşu genelde Enter gönderir
+          // Eğer odak bir butonda değilse, videoyu oynat/durdur
+          // Aksi halde butonun kendi click olayı çalışsın
+          if (!['BUTTON', 'A'].includes(document.activeElement.tagName)) {
+            e.preventDefault(); // Sayfanın kaymasını engelle
+            if (video.paused) video.play(); else video.pause();
+          }
+          break;
+
+        case 'ArrowRight': // İleri Sar
+          // Eğer video odaklıysa veya genel yapıdaysa
+          if (document.activeElement.tagName !== 'BUTTON') {
+            video.currentTime += 10;
+          }
+          break;
+
+        case 'ArrowLeft': // Geri Sar
+          if (document.activeElement.tagName !== 'BUTTON') {
+            video.currentTime -= 10;
+          }
+          break;
+
+        case 'ArrowUp': // Tam Ekran (TV Kumandası Yukarı Tuşu)
+          if (document.activeElement.tagName !== 'BUTTON') {
+            e.preventDefault();
+            if (video.requestFullscreen) video.requestFullscreen();
+            else if (video.webkitRequestFullscreen) video.webkitRequestFullscreen();
+            else if (video.msRequestFullscreen) video.msRequestFullscreen();
+          }
+          break;
+
+        case 'ArrowDown': // Odaktan Çık (Player hapsinden kurtulma)
+          if (document.activeElement === video || document.activeElement.tagName === 'VIDEO') {
+            document.body.focus();
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedMatch]); // selectedMatch değişince listener yenilensin
 }
