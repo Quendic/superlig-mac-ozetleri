@@ -237,33 +237,27 @@ export default function Home() {
               )}
             </div>
 
-            {/* Goller */}
+            {/* Goller (Sadece Bilgi) */}
             {selectedMatch.events && selectedMatch.events.filter(e => e.type === 'goal').length > 0 && (
               <div style={{ marginTop: '1.5rem' }}>
                 <h3 style={{ fontSize: '1rem', marginBottom: '0.75rem', color: '#ccc' }}>⚽ Goller</h3>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                   {selectedMatch.events.filter(e => e.type === 'goal').map((e, i) => (
-                    <button
+                    <span
                       key={i}
-                      onClick={() => {
-                        if (e.videoUrl) {
-                          setSelectedMatch(prev => ({ ...prev, videoUrl: e.videoUrl, title: e.description }));
-                        }
-                      }}
-                      className="goal-btn"
                       style={{
                         padding: '0.4rem 0.8rem',
-                        fontSize: '0.8rem',
-                        background: 'rgba(16,185,129,0.15)',
-                        border: '1px solid #10b981',
-                        borderRadius: '8px',
-                        color: '#fff',
-                        cursor: e.videoUrl ? 'pointer' : 'default',
-                        opacity: e.videoUrl ? 1 : 0.5
+                        fontSize: '0.9rem',
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        borderRadius: '6px',
+                        color: '#eee',
+                        userSelect: 'none'
                       }}
                     >
-                      {e.minute}&apos; {e.description} ⚽
-                    </button>
+                      {Process.env.NODE_ENV === 'development' ? console.log(e) : null}
+                      <span style={{ color: '#10b981', fontWeight: 'bold' }}>{e.minute}&apos;</span> {e.description} ⚽
+                    </span>
                   ))}
                 </div>
               </div>
