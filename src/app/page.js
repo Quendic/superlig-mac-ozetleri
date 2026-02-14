@@ -255,7 +255,6 @@ export default function Home() {
                         userSelect: 'none'
                       }}
                     >
-                      {Process.env.NODE_ENV === 'development' ? console.log(e) : null}
                       <span style={{ color: '#10b981', fontWeight: 'bold' }}>{e.minute}&apos;</span> {e.description} ⚽
                     </span>
                   ))}
