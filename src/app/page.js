@@ -13,11 +13,10 @@ export default function Home() {
   const [fixtureLoading, setFixtureLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Klavye Kontrollerini Başlat
   useKeyboardControls(null, selectedMatch);
 
   const weeks = Array.from({ length: 34 }, (_, i) => i + 1);
-
-  useKeyboardControls(null, selectedMatch);
 
   // İlk açılışta güncel haftayı tespit et
   useEffect(() => {
@@ -40,18 +39,24 @@ export default function Home() {
     init();
   }, []);
 
-  // Maçlar yüklendiğinde İLK MAÇA odaklan (Auto-focus)
+  // Maçlar yüklendiğinde İLK MAÇA odaklan (Auto-focus - Retry Logic)
   useEffect(() => {
     if (!fixtureLoading && matches.length > 0) {
-      setTimeout(() => {
+      const intervalId = setInterval(() => {
         const firstMatch = document.querySelector('.match-card');
-        if (firstMatch) firstMatch.focus();
-      }, 300);
+        if (firstMatch) {
+          firstMatch.focus();
+          clearInterval(intervalId); // Bulunca dur
+        }
+      }, 100);
+
+      // 2 saniye sonra pes et (sonsuz döngü olmasın)
+      setTimeout(() => clearInterval(intervalId), 2000);
     }
   }, [fixtureLoading, matches]);
 
 
-  // Hafta değişince fikstürü çek (ilk yükleme hariç)
+  // Hafta değişince fikstürü çek
   useEffect(() => {
     if (selectedWeek === null) return;
     const fetchFixture = async () => {
@@ -279,10 +284,7 @@ export default function Home() {
 // Global Klavye Dinleyicisi (TV Kumandası & Klavye Desteği)
 function useKeyboardControls(videoRef, selectedMatch) {
   useEffect(() => {
-    if (!selectedMatch) return;
-
     const handleKeyDown = (e) => {
-      // Eğer kullanıcı bir input içindeyse (ki burada yok ama genel kural) karışma
       if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
 
       const video = document.querySelector('video');
@@ -293,27 +295,32 @@ function useKeyboardControls(videoRef, selectedMatch) {
         case 'Enter': // Kumanda OK tuşu genelde Enter gönderir
           // Eğer odak bir butonda değilse, videoyu oynat/durdur
           // Aksi halde butonun kendi click olayı çalışsın
-          if (!['BUTTON', 'A', 'SELECT'].includes(document.activeElement.tagName)) {
+          if (!['BUTTON', 'A', 'SELECT'].includes(document.activeElement.tagName) && video) {
             e.preventDefault(); // Sayfanın kaymasını engelle
-            if (video && video.paused) video.play(); else if (video) video.pause();
+            if (video.paused) video.play(); else video.pause();
           }
           break;
 
         case 'ArrowLeft':
-          // SOL TUŞA BASILINCA:
-          // Eğer odak video veya gol butonlarındaysa (Sağ panel), Sol panele (aktif maça) odakla
-          const ae = document.activeElement;
-          const insideRightPanel = ae.tagName === 'VIDEO' || ae.classList.contains('goal-btn') || ae.closest('.main-content');
+          // SOL TUŞ MANTIĞI:
+          // Odak nerede olursa olsun, eğer 'sidebar' (sol menü) içinde DEĞİLSEK,
+          // Sol tuşa basıldığında zorla sol menüdeki aktif maça git.
+          const sidebar = document.querySelector('.sidebar');
+          const activeEl = document.activeElement;
 
-          if (insideRightPanel) {
+          // Sidebar yoksa veya odak zaten sidebar içindeyse karışma (normal çalışsın)
+          if (sidebar && !sidebar.contains(activeEl)) {
             const activeMatch = document.querySelector('.match-card.active');
             if (activeMatch) {
               e.preventDefault();
               activeMatch.focus();
             } else {
-              // Aktif yoksa ilki
+              // Aktif yoksa, listedeki ilk elemana git
               const first = document.querySelector('.match-card');
-              if (first) first.focus();
+              if (first) {
+                e.preventDefault();
+                first.focus();
+              }
             }
           }
           break;
@@ -322,5 +329,5 @@ function useKeyboardControls(videoRef, selectedMatch) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedMatch]); // selectedMatch değişince listener yenilensin
+  }, [selectedMatch]);
 }
