@@ -86,6 +86,14 @@ export default function Home() {
     setError(null);
     setSelectedMatch(match);
 
+    const safeFullscreen = (v) => {
+      try {
+        if (v.requestFullscreen) v.requestFullscreen().catch(() => { });
+        else if (v.webkitRequestFullscreen) v.webkitRequestFullscreen();
+        else if (v.msRequestFullscreen) v.msRequestFullscreen();
+      } catch (e) { console.log('Fullscreen failed:', e); }
+    };
+
     // Eğer doğrudan video yoksa, scrape API'yi dene
     if (!match.videoUrl && match.pageLink) {
       setLoading(true);
@@ -103,9 +111,7 @@ export default function Home() {
           const v = document.querySelector('video');
           if (v) {
             v.play().catch(() => { }); // Otomatik oynatmayı da dene
-            if (v.requestFullscreen) v.requestFullscreen().catch(() => { });
-            else if (v.webkitRequestFullscreen) v.webkitRequestFullscreen().catch(() => { });
-            else if (v.msRequestFullscreen) v.msRequestFullscreen().catch(() => { });
+            safeFullscreen(v);
           }
         }, 500); // Video yüklenmesi için kısa bir gecikme
 
@@ -121,9 +127,7 @@ export default function Home() {
         const v = document.querySelector('video');
         if (v) {
           v.play().catch(() => { });
-          if (v.requestFullscreen) v.requestFullscreen().catch(() => { });
-          else if (v.webkitRequestFullscreen) v.webkitRequestFullscreen().catch(() => { });
-          else if (v.msRequestFullscreen) v.msRequestFullscreen().catch(() => { });
+          safeFullscreen(v);
         }
       }, 100);
     }
@@ -222,10 +226,17 @@ export default function Home() {
                   playsInline
                   onLoadedMetadata={(e) => {
                     const v = e.target;
+                    // Otomatik oynat
                     v.play().catch(() => { });
-                    if (v.requestFullscreen) v.requestFullscreen().catch(() => { });
-                    else if (v.webkitRequestFullscreen) v.webkitRequestFullscreen().catch(() => { });
-                    else if (v.msRequestFullscreen) v.msRequestFullscreen().catch(() => { });
+
+                    // Tam ekran dene (Güvenli yöntem)
+                    try {
+                      if (v.requestFullscreen) v.requestFullscreen().catch(() => { });
+                      else if (v.webkitRequestFullscreen) v.webkitRequestFullscreen();
+                      else if (v.msRequestFullscreen) v.msRequestFullscreen();
+                    } catch (err) {
+                      console.log('Fullscreen error:', err);
+                    }
                   }}
                   width="100%"
                   height="100%"
