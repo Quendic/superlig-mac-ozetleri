@@ -339,6 +339,18 @@ function useKeyboardControls(videoRef, selectedMatch) {
           break;
 
         case 'ArrowUp':
+          // Eğer odak PLAYER (Video) üzerindeyse -> Tam Ekran Yap
+          if (document.activeElement.tagName === 'VIDEO') {
+            e.preventDefault();
+            const v = document.activeElement;
+            try {
+              if (v.requestFullscreen) v.requestFullscreen().catch(() => { });
+              else if (v.webkitRequestFullscreen) v.webkitRequestFullscreen();
+              else if (v.msRequestFullscreen) v.msRequestFullscreen();
+            } catch (err) { console.log('Fullscreen manual error:', err); }
+            return;
+          }
+
           // Maç listesinde yukarı çıkma
           if (document.activeElement.classList.contains('match-card')) {
             e.preventDefault();
