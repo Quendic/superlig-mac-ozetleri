@@ -255,34 +255,6 @@ function useKeyboardControls(videoRef, selectedMatch) {
             if (video.paused) video.play(); else video.pause();
           }
           break;
-
-        case 'ArrowRight': // İleri Sar
-          // Eğer video odaklıysa veya genel yapıdaysa
-          if (document.activeElement.tagName !== 'BUTTON') {
-            video.currentTime += 10;
-          }
-          break;
-
-        case 'ArrowLeft': // Geri Sar
-          if (document.activeElement.tagName !== 'BUTTON') {
-            video.currentTime -= 10;
-          }
-          break;
-
-        case 'ArrowUp': // Tam Ekran (TV Kumandası Yukarı Tuşu)
-          if (document.activeElement.tagName !== 'BUTTON') {
-            e.preventDefault();
-            if (video.requestFullscreen) video.requestFullscreen();
-            else if (video.webkitRequestFullscreen) video.webkitRequestFullscreen();
-            else if (video.msRequestFullscreen) video.msRequestFullscreen();
-          }
-          break;
-
-        case 'ArrowDown': // Odaktan Çık (Player hapsinden kurtulma)
-          if (document.activeElement === video || document.activeElement.tagName === 'VIDEO') {
-            document.body.focus();
-          }
-          break;
       }
     };
 
