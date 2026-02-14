@@ -368,6 +368,34 @@ function useKeyboardControls(videoRef, selectedMatch) {
             }
           }
           break;
+
+        case 'ArrowRight':
+          // Video üzerindeyken Sağ Tuş -> İleri Sar (10sn)
+          if (document.activeElement.tagName === 'VIDEO') {
+            e.preventDefault();
+            const v = document.activeElement;
+            if (v && v.currentTime) v.currentTime += 10;
+          }
+          break;
+
+        case 'ArrowDown':
+          // Video üzerindeyken Aşağı Tuş -> Fokus düşmesin diye engelle
+          if (document.activeElement.tagName === 'VIDEO') {
+            e.preventDefault();
+            return;
+          }
+
+          // Maç listesinde aşağı inme
+          if (document.activeElement.classList.contains('match-card')) {
+            e.preventDefault();
+            let next = document.activeElement.nextElementSibling;
+            // Label veya başka bir şey araya girerse diye while döngüsü (gerçi yapıda sadece card var ama olsun)
+            while (next && !next.classList.contains('match-card')) {
+              next = next.nextElementSibling;
+            }
+            if (next) next.focus();
+          }
+          break;
       }
     };
 
