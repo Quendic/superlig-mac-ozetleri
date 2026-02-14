@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Play, Calendar, List, AlertCircle } from 'lucide-react';
+// Deploy trigger to production domain
 import './globals.css';
 
 export default function Home() {
