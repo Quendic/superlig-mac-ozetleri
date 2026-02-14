@@ -202,6 +202,13 @@ export default function Home() {
                   controls
                   autoPlay
                   playsInline
+                  onLoadedMetadata={(e) => {
+                    const v = e.target;
+                    v.play().catch(() => { });
+                    if (v.requestFullscreen) v.requestFullscreen().catch(() => { });
+                    else if (v.webkitRequestFullscreen) v.webkitRequestFullscreen().catch(() => { });
+                    else if (v.msRequestFullscreen) v.msRequestFullscreen().catch(() => { });
+                  }}
                   width="100%"
                   height="100%"
                   style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
