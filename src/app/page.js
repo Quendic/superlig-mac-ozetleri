@@ -302,25 +302,53 @@ function useKeyboardControls(videoRef, selectedMatch) {
           break;
 
         case 'ArrowLeft':
-          // SOL TUŞ MANTIĞI:
-          // Odak nerede olursa olsun, eğer 'sidebar' (sol menü) içinde DEĞİLSEK,
-          // Sol tuşa basıldığında zorla sol menüdeki aktif maça git.
+          // Odak sidebar içinde değilse, sidebar'a dön
           const sidebar = document.querySelector('.sidebar');
-          const activeEl = document.activeElement;
+          const ae = document.activeElement;
 
-          // Sidebar yoksa veya odak zaten sidebar içindeyse karışma (normal çalışsın)
-          if (sidebar && !sidebar.contains(activeEl)) {
+          if (sidebar && !sidebar.contains(ae)) {
             const activeMatch = document.querySelector('.match-card.active');
             if (activeMatch) {
               e.preventDefault();
               activeMatch.focus();
             } else {
-              // Aktif yoksa, listedeki ilk elemana git
               const first = document.querySelector('.match-card');
               if (first) {
                 e.preventDefault();
                 first.focus();
               }
+            }
+          }
+          break;
+
+        case 'ArrowDown':
+          // Maç listesinde aşağı inme
+          if (document.activeElement.classList.contains('match-card')) {
+            e.preventDefault();
+            let next = document.activeElement.nextElementSibling;
+            // Label veya başka bir şey araya girerse diye while döngüsü (gerçi yapıda sadece card var ama olsun)
+            while (next && !next.classList.contains('match-card')) {
+              next = next.nextElementSibling;
+            }
+            if (next) next.focus();
+          }
+          break;
+
+        case 'ArrowUp':
+          // Maç listesinde yukarı çıkma
+          if (document.activeElement.classList.contains('match-card')) {
+            e.preventDefault();
+            let prev = document.activeElement.previousElementSibling;
+            while (prev && !prev.classList.contains('match-card')) {
+              prev = prev.previousElementSibling;
+            }
+
+            if (prev) {
+              prev.focus();
+            } else {
+              // Listenin başındayız, hafta seçiciye çık
+              const dropdown = document.querySelector('.dropdown');
+              if (dropdown) dropdown.focus();
             }
           }
           break;
