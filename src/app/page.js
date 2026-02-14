@@ -148,6 +148,7 @@ export default function Home() {
           <select
             className="dropdown"
             value={selectedWeek || ''}
+            tabIndex="-1" // Oto-fokus engellendi, sadece JS ile erişilecek
             onChange={(e) => {
               setSelectedWeek(parseInt(e.target.value));
               setSelectedMatch(null);
