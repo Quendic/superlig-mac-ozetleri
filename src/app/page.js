@@ -75,15 +75,39 @@ export default function Home() {
         const res = await fetch(`/api/scrape?url=${encodeURIComponent(match.pageLink)}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Video yüklenemedi');
-        // videoSource'u match objesine ekle
-        match.videoUrl = data.videoSource;
-        match.videoType = data.videoType;
-        setSelectedMatch({ ...match });
+
+        // Veriyi güncelle
+        const updatedMatch = { ...match, videoUrl: data.videoSource, videoType: data.videoType };
+        setSelectedMatch(updatedMatch);
+
+        // Otomatik Tam Ekran Denemesi (API Sonrası)
+        setTimeout(() => {
+          const v = document.querySelector('video');
+          if (v) {
+            v.play().catch(() => { }); // Otomatik oynatmayı da dene
+            if (v.requestFullscreen) v.requestFullscreen().catch(() => { });
+            else if (v.webkitRequestFullscreen) v.webkitRequestFullscreen().catch(() => { });
+            else if (v.msRequestFullscreen) v.msRequestFullscreen().catch(() => { });
+          }
+        }, 500); // Video yüklenmesi için kısa bir gecikme
+
       } catch (err) {
         setError(err.message);
       } finally {
         setLoading(false);
       }
+    } else if (match.videoUrl) {
+      // Zaten video varsa direkt seç ve tam ekrana geç
+      setSelectedMatch(match);
+      setTimeout(() => {
+        const v = document.querySelector('video');
+        if (v) {
+          v.play().catch(() => { });
+          if (v.requestFullscreen) v.requestFullscreen().catch(() => { });
+          else if (v.webkitRequestFullscreen) v.webkitRequestFullscreen().catch(() => { });
+          else if (v.msRequestFullscreen) v.msRequestFullscreen().catch(() => { });
+        }
+      }, 100);
     }
   };
 
