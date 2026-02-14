@@ -17,6 +17,8 @@ export default function Home() {
 
   const weeks = Array.from({ length: 34 }, (_, i) => i + 1);
 
+  useKeyboardControls(null, selectedMatch);
+
   // İlk açılışta güncel haftayı tespit et
   useEffect(() => {
     const init = async () => {
@@ -37,6 +39,17 @@ export default function Home() {
     };
     init();
   }, []);
+
+  // Maçlar yüklendiğinde İLK MAÇA odaklan (Auto-focus)
+  useEffect(() => {
+    if (!fixtureLoading && matches.length > 0) {
+      setTimeout(() => {
+        const firstMatch = document.querySelector('.match-card');
+        if (firstMatch) firstMatch.focus();
+      }, 300);
+    }
+  }, [fixtureLoading, matches]);
+
 
   // Hafta değişince fikstürü çek (ilk yükleme hariç)
   useEffect(() => {
@@ -273,7 +286,6 @@ function useKeyboardControls(videoRef, selectedMatch) {
       if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
 
       const video = document.querySelector('video');
-      if (!video) return;
 
       // Hangi tuşa basıldı?
       switch (e.key) {
@@ -281,9 +293,28 @@ function useKeyboardControls(videoRef, selectedMatch) {
         case 'Enter': // Kumanda OK tuşu genelde Enter gönderir
           // Eğer odak bir butonda değilse, videoyu oynat/durdur
           // Aksi halde butonun kendi click olayı çalışsın
-          if (!['BUTTON', 'A'].includes(document.activeElement.tagName)) {
+          if (!['BUTTON', 'A', 'SELECT'].includes(document.activeElement.tagName)) {
             e.preventDefault(); // Sayfanın kaymasını engelle
-            if (video.paused) video.play(); else video.pause();
+            if (video && video.paused) video.play(); else if (video) video.pause();
+          }
+          break;
+
+        case 'ArrowLeft':
+          // SOL TUŞA BASILINCA:
+          // Eğer odak video veya gol butonlarındaysa (Sağ panel), Sol panele (aktif maça) odakla
+          const ae = document.activeElement;
+          const insideRightPanel = ae.tagName === 'VIDEO' || ae.classList.contains('goal-btn') || ae.closest('.main-content');
+
+          if (insideRightPanel) {
+            const activeMatch = document.querySelector('.match-card.active');
+            if (activeMatch) {
+              e.preventDefault();
+              activeMatch.focus();
+            } else {
+              // Aktif yoksa ilki
+              const first = document.querySelector('.match-card');
+              if (first) first.focus();
+            }
           }
           break;
       }
