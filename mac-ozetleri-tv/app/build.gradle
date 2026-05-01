@@ -1,0 +1,52 @@
+plugins {
+    id 'com.android.application'
+}
+
+def signingPropertiesFile = rootProject.file('app/signing.properties')
+def signingProperties = new Properties()
+if (signingPropertiesFile.exists()) {
+    signingProperties.load(new FileInputStream(signingPropertiesFile))
+}
+
+android {
+    namespace 'com.quendic.macozetleri'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.quendic.macozetleri"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    signingConfigs {
+        release {
+            if (signingProperties.containsKey('STORE_FILE')) {
+                storeFile file(signingProperties['STORE_FILE'])
+                storePassword signingProperties['STORE_PASSWORD']
+                keyAlias signingProperties['KEY_ALIAS']
+                keyPassword signingProperties['KEY_PASSWORD']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    implementation 'androidx.leanback:leanback:1.0.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.webkit:webkit:1.8.0'
+}

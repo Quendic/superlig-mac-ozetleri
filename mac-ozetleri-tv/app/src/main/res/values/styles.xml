@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.MacOzetleri" parent="@style/Theme.Leanback">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:colorBackground">#0a0a0c</item>
+    </style>
+</resources>
