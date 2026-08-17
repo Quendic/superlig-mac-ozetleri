@@ -29,7 +29,7 @@ export async function GET(request) {
     }
 
     // beIN Sports'un özet sayfası, hafta bazlı tüm maçları ve video URL'lerini döndürür.
-    const url = `https://beinsports.com.tr/mac-ozetleri-goller/super-lig/ozet/2025-2026/${week}/any-mac-ozeti`;
+    const url = `https://beinsports.com.tr/mac-ozetleri-goller/super-lig/ozet/2026-2027/${week}/any-mac-ozeti`;
 
     try {
         const response = await axios.get(url, {
