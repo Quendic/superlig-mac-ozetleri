@@ -1,0 +1,59 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Player</title>
+</head>
+<body style="background-color: #222; color: white;">
+    <h1>Test Video Player</h1>
+    <p>Testing URL: <span id="url"></span></p>
+    
+    <video 
+        id="player"
+        controls 
+        width="640" 
+        height="360" 
+        style="background: black;"
+        playsinline
+        crossorigin="anonymous"
+    >
+        Your browser does not support the video tag.
+    </video>
+
+    <div style="margin-top: 20px;">
+        <button onclick="loadVideo()">Load Default Test</button>
+        <input type="text" id="customUrl" placeholder="Enter custom URL" style="width: 300px; padding: 5px;">
+        <button onclick="loadCustom()">Load Custom</button>
+    </div>
+
+    <script>
+        // Actual resolved URL from previous step (Step 159)
+        const defaultUrl = 'https://dt-vod-beinsports.akamaized.net/9/33/44ad/ligtvcomtr_tauri_ozt_20232024_26_ank_gs_26h_18subat_ip.mp4?hdnts=test';
+        
+        const video = document.getElementById('player');
+        const urlSpan = document.getElementById('url');
+
+        function playUrl(url) {
+            console.log("Playing:", url);
+            urlSpan.textContent = url;
+            video.src = url;
+            video.load();
+            video.play().catch(e => {
+                console.error("Play error:", e);
+                alert("Play error: " + e.message);
+            });
+        }
+
+        function loadVideo() {
+            playUrl(defaultUrl);
+        }
+
+        function loadCustom() {
+            const url = document.getElementById('customUrl').value;
+            if (url) playUrl(url);
+        }
+    </script>
+</body>
+</html>
