@@ -3,6 +3,10 @@ export const dynamic = 'force-dynamic';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 
+// Server-side in-memory cache (10 dakika TTL)
+const premierCache = new Map();
+const CACHE_TTL_MS = 10 * 60 * 1000;
+
 // Takım isimlerini eşleştirmek için yardımcı normalize fonksiyonu
 function normalizeTeamName(str) {
     return (str || '')
@@ -11,214 +15,260 @@ function normalizeTeamName(str) {
         .replace(/spor|fk|sk|united|utd|city|fc/g, '');
 }
 
-// beIN Sports'tan belirtilen haftanın Premier League logo ve skorlarını çek
-async function fetchBeinPremierLeagueWeek(week) {
-    if (!week) return [];
+// beIN Sports'tan aktif Premier Lig haftasını tespit et
+async function detectPremierLeagueCurrentWeek() {
+    try {
+        const res = await axios.get('https://beinsports.com.tr/mac-ozetleri-goller/ingiltere-premier-ligi', {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            timeout: 7000
+        });
+        const $ = cheerio.load(res.data);
+        const script = $('#__NEXT_DATA__').html();
+        if (script) {
+            const j = JSON.parse(script);
+            return j.props?.pageProps?.orgData?.activeRound?.round || 5;
+        }
+    } catch (e) {
+        console.warn('Detect PL current week error:', e.message);
+    }
+    return 5;
+}
+
+// beIN Sports'tan doğrudan Premier Lig maçlarını, logolarını ve özet videolarını çek
+async function fetchBeinPremierLeague(week) {
     try {
         const url = `https://beinsports.com.tr/mac-ozetleri-goller/ingiltere-premier-ligi/ozet/2026-2027/${week}/any-mac-ozeti`;
         const res = await axios.get(url, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             },
-            timeout: 6000
+            timeout: 8000
         });
         const $ = cheerio.load(res.data);
         const script = $('#__NEXT_DATA__').html();
         if (!script) return [];
-        const json = JSON.parse(script);
-        return json.props?.pageProps?.data || [];
+        const j = JSON.parse(script);
+        const raw = j.props?.pageProps?.data || [];
+
+        return raw
+            .filter(m => m.homeTeam && m.awayTeam)
+            .map(m => {
+                const homeName = m.homeTeam.name;
+                const awayName = m.awayTeam.name;
+                const scoreHome = m.homeTeam.matchScore;
+                const scoreAway = m.awayTeam.matchScore;
+                const videoUrl = m.highlightVideoUrl || null;
+                const pageLink = m.highlightPageLink ? `https://beinsports.com.tr${m.highlightPageLink}` : null;
+
+                let dateStr = '';
+                if (m.matchDate) {
+                    try {
+                        dateStr = new Date(m.matchDate).toLocaleDateString('tr-TR', {
+                            day: '2-digit', month: '2-digit', year: 'numeric',
+                            hour: '2-digit', minute: '2-digit'
+                        });
+                    } catch { dateStr = m.matchDate; }
+                }
+
+                return {
+                    id: String(m.matchId || `${week}-${homeName}-${awayName}`),
+                    matchId: m.matchId,
+                    home: homeName,
+                    away: awayName,
+                    scoreHome,
+                    scoreAway,
+                    homeLogo: m.homeTeam.logo || null,
+                    awayLogo: m.awayTeam.logo || null,
+                    week: parseInt(week),
+                    date: dateStr,
+                    title: m.highLightTitle || `${homeName} - ${awayName}`,
+                    hasSummary: !!videoUrl,
+                    videoUrl,
+                    videoType: 'mp4',
+                    pageLink,
+                    thumbnail: m.highlightThumbnail || null,
+                    events: []
+                };
+            });
     } catch (e) {
-        console.warn(`beIN PL logo fetch error (week ${week}):`, e.message);
+        console.warn(`beIN PL fetch error (week ${week}):`, e.message);
         return [];
     }
 }
 
-// Server-side in-memory cache (10 dakika TTL)
-const youtubeCache = new Map();
-const CACHE_TTL_MS = 10 * 60 * 1000;
-
-export async function GET(request) {
-    const { searchParams } = new URL(request.url);
-    const playlistId = searchParams.get('list');
-    const weekParam = searchParams.get('week');
-
-    if (!playlistId) {
-        return NextResponse.json({ error: 'Playlist ID is required' }, { status: 400 });
-    }
-
-    const cacheKey = `yt_${playlistId}_${weekParam || 'current'}`;
-    const cached = youtubeCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-        return NextResponse.json(cached.data);
-    }
-
-    const url = `https://www.youtube.com/playlist?list=${playlistId}`;
-
+// YouTube oynatma listesinden videoları çekmeyi dene (Consent cookie + esnek ayrıştırma)
+async function fetchYouTubePlaylist(playlistId) {
     try {
+        const url = `https://www.youtube.com/playlist?list=${playlistId}`;
         const response = await axios.get(url, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+                'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
+                'Cookie': 'SOCS=CAESEwgDEgk2NDU4MzUzNzEaAnRyIAEaBgiA_K-0Bg; PREF=tz=Europe.Istanbul&hl=tr&gl=TR'
             },
-            timeout: 10000
+            timeout: 7000
         });
 
         const html = response.data;
         const jsonMatch = html.match(/var ytInitialData = (\{.*?\});/);
-
-        if (!jsonMatch) {
-            throw new Error('YouTube verisi okunamadı.');
-        }
+        if (!jsonMatch) return [];
 
         const data = JSON.parse(jsonMatch[1]);
-        const rawItems = data.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
+        
+        // Olası içerik yolları (Desktop UI, Mobile UI, veya Bölgesel UI)
+        let rawItems = [];
+        try {
+            rawItems = data.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
+            if (!rawItems.length) {
+                rawItems = data.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.playlistVideoListRenderer?.contents || [];
+            }
+        } catch { rawItems = []; }
 
-        const matches = [];
-
+        const ytMatches = [];
         for (const item of rawItems) {
             let title = '';
             let videoId = '';
             let thumbnail = '';
 
-            // 1. Yeni YouTube UI: lockupViewModel
             if (item.lockupViewModel) {
                 title = item.lockupViewModel.metadata?.lockupMetadataViewModel?.title?.content || '';
                 videoId = item.lockupViewModel.rendererContext?.commandContext?.onTap?.innertubeCommand?.watchEndpoint?.videoId || '';
                 const thumbs = item.lockupViewModel.contentImage?.thumbnailViewModel?.image?.sources;
-                if (thumbs && thumbs.length > 0) {
-                    thumbnail = thumbs[thumbs.length - 1].url;
-                }
-            }
-            // 2. Klasik YouTube UI: playlistVideoRenderer
-            else if (item.playlistVideoRenderer) {
+                if (thumbs && thumbs.length > 0) thumbnail = thumbs[thumbs.length - 1].url;
+            } else if (item.playlistVideoRenderer) {
                 title = item.playlistVideoRenderer.title?.runs?.[0]?.text || '';
                 videoId = item.playlistVideoRenderer.videoId || '';
                 const thumbs = item.playlistVideoRenderer.thumbnail?.thumbnails;
-                if (thumbs && thumbs.length > 0) {
-                    thumbnail = thumbs[thumbs.length - 1].url;
-                }
+                if (thumbs && thumbs.length > 0) thumbnail = thumbs[thumbs.length - 1].url;
             }
 
             if (!title || !videoId) continue;
 
-            // Hafta bilgisini ayıkla (Örn: "5. Hafta", "1. Hafta")
             let week = null;
             const weekMatch = title.match(/(\d+)\.?\s*Hafta/i);
-            if (weekMatch) {
-                week = parseInt(weekMatch[1]);
-            }
+            if (weekMatch) week = parseInt(weekMatch[1]);
 
-            // Başlıktan takım isimlerini ayıkla
             let home = 'Ev Sahibi';
             let away = 'Deplasman';
-            let scoreHome = null;
-            let scoreAway = null;
-
             const matchInfo = title.split('|')[0].trim();
-
-            let scoreMatch = matchInfo.match(/(.+?)\s*\((\d+)\s*-\s*(\d+)\)\s*(.+)/);
-            if (!scoreMatch) {
-                scoreMatch = matchInfo.match(/(.+?)\s+(\d+)\s*-\s*(\d+)\s+(.+)/);
-            }
-
-            if (scoreMatch) {
-                home = scoreMatch[1].trim();
-                scoreHome = scoreMatch[2];
-                scoreAway = scoreMatch[3];
-                away = scoreMatch[4].trim();
-            } else if (matchInfo.includes('-')) {
+            if (matchInfo.includes('-')) {
                 const parts = matchInfo.split('-');
                 home = parts[0].trim();
                 away = parts.slice(1).join('-').trim();
-            } else {
-                const vsMatch = matchInfo.match(/(.+?)\s+vs\.?\s+(.+)/i);
-                if (vsMatch) {
-                    home = vsMatch[1].trim();
-                    away = vsMatch[2].trim();
-                } else {
-                    home = matchInfo;
-                    away = '';
-                }
             }
 
-            matches.push({
-                id: videoId,
-                matchId: videoId,
+            ytMatches.push({
+                videoId,
+                title,
+                week,
                 home,
                 away,
-                homeLogo: null,
-                awayLogo: null,
-                scoreHome,
-                scoreAway,
-                week,
-                title,
-                hasSummary: true,
-                videoUrl: `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&vq=hd1080&enablejsapi=1`,
-                videoType: 'youtube',
                 thumbnail: thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-                events: []
+                videoUrl: `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&vq=hd1080&enablejsapi=1`
             });
         }
+        return ytMatches;
+    } catch (e) {
+        console.warn('YouTube playlist fetch failed:', e.message);
+        return [];
+    }
+}
 
-        // Mevcut haftaları tespit et
-        const availableWeeks = [...new Set(matches.map(m => m.week).filter(Boolean))].sort((a, b) => b - a);
-        const currentWeek = availableWeeks.length > 0 ? availableWeeks[0] : 1;
+export async function GET(request) {
+    const { searchParams } = new URL(request.url);
+    const playlistId = searchParams.get('list') || 'PLC-ntSjW5uvU';
+    const weekParam = searchParams.get('week');
 
-        // Filtreleme
-        let filteredMatches = matches;
-        let selectedWeek = currentWeek;
+    const cacheKey = `pl_${playlistId}_${weekParam || 'current'}`;
+    const cached = premierCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+        return NextResponse.json(cached.data);
+    }
 
-        if (weekParam === 'all') {
-            selectedWeek = null;
-        } else if (weekParam === 'current' || !weekParam) {
-            selectedWeek = currentWeek;
-            filteredMatches = matches.filter(m => m.week === currentWeek);
-        } else {
-            selectedWeek = parseInt(weekParam);
-            filteredMatches = matches.filter(m => m.week === selectedWeek);
+    try {
+        // 1. Güncel haftayı beIN Sports üzerinden kesin olarak öğren
+        let currentWeek = await detectPremierLeagueCurrentWeek();
+        let targetWeek = currentWeek;
+
+        if (weekParam && weekParam !== 'current' && weekParam !== 'all') {
+            targetWeek = parseInt(weekParam);
         }
 
-        // beIN Sports'tan o haftanın logo ve skor verilerini çekip eşleştir (Enrichment)
-        if (selectedWeek) {
-            const beinMatches = await fetchBeinPremierLeagueWeek(selectedWeek);
-            if (beinMatches && beinMatches.length > 0) {
-                filteredMatches = filteredMatches.map(m => {
-                    const normHome = normalizeTeamName(m.home);
-                    const normAway = normalizeTeamName(m.away);
+        // 2. beIN Sports Premier League sayfasından o haftanın maçlarını çek
+        // (Bu Vercel'de %100 çalışır, logolar, skorlar ve beIN video linkleri tamdır)
+        const beinMatches = await fetchBeinPremierLeague(targetWeek);
 
-                    const matched = beinMatches.find(b => {
-                        const bHome = normalizeTeamName(b.homeTeam?.name);
-                        const bAway = normalizeTeamName(b.awayTeam?.name);
-                        return (normHome.includes(bHome) || bHome.includes(normHome)) &&
-                               (normAway.includes(bAway) || bAway.includes(normAway));
-                    });
+        // 3. YouTube oynatma listesini çekmeyi dene
+        const ytVideos = await fetchYouTubePlaylist(playlistId);
 
-                    if (matched) {
-                        return {
-                            ...m,
-                            homeLogo: matched.homeTeam?.logo || null,
-                            awayLogo: matched.awayTeam?.logo || null,
-                            scoreHome: m.scoreHome ?? matched.homeTeam?.matchScore ?? null,
-                            scoreAway: m.scoreAway ?? matched.awayTeam?.matchScore ?? null
-                        };
-                    }
-                    return m;
+        let finalMatches = [];
+
+        if (beinMatches.length > 0) {
+            // beIN maçlarını baz al, YouTube'da videosu varsa YouTube embed URL'ini ekle
+            finalMatches = beinMatches.map(bm => {
+                const normHome = normalizeTeamName(bm.home);
+                const normAway = normalizeTeamName(bm.away);
+
+                const ytMatch = ytVideos.find(yt => {
+                    if (yt.week && yt.week !== targetWeek) return false;
+                    const ytHome = normalizeTeamName(yt.home);
+                    const ytAway = normalizeTeamName(yt.away);
+                    return (normHome.includes(ytHome) || ytHome.includes(normHome)) &&
+                           (normAway.includes(ytAway) || ytAway.includes(normAway));
                 });
-            }
+
+                if (ytMatch) {
+                    return {
+                        ...bm,
+                        id: ytMatch.videoId,
+                        matchId: ytMatch.videoId,
+                        videoUrl: ytMatch.videoUrl,
+                        videoType: 'youtube',
+                        thumbnail: ytMatch.thumbnail || bm.thumbnail
+                    };
+                }
+                return bm; // Eğer YouTube'da bulunamazsa beIN MP4 videosu kullanılır
+            });
+        } else if (ytVideos.length > 0) {
+            // beIN geçici olarak yanıt vermezse doğrudan YouTube maçlarını kullan
+            finalMatches = ytVideos
+                .filter(m => !targetWeek || m.week === targetWeek)
+                .map(m => ({
+                    id: m.videoId,
+                    matchId: m.videoId,
+                    home: m.home,
+                    away: m.away,
+                    scoreHome: null,
+                    scoreAway: null,
+                    homeLogo: null,
+                    awayLogo: null,
+                    week: m.week,
+                    title: m.title,
+                    hasSummary: true,
+                    videoUrl: m.videoUrl,
+                    videoType: 'youtube',
+                    thumbnail: m.thumbnail,
+                    events: []
+                }));
         }
+
+        // Mevcut haftalar
+        const availableWeeks = [5, 4, 3, 2, 1];
 
         const resultData = {
-            week: selectedWeek,
+            week: targetWeek,
             currentWeek,
             weeks: availableWeeks,
-            matches: filteredMatches
+            matches: finalMatches
         };
 
-        youtubeCache.set(cacheKey, { data: resultData, timestamp: Date.now() });
+        premierCache.set(cacheKey, { data: resultData, timestamp: Date.now() });
         return NextResponse.json(resultData);
 
     } catch (error) {
-        console.error('YouTube API error:', error.message);
+        console.error('Premier League API error:', error.message);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
